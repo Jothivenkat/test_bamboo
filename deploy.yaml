@@ -1,0 +1,92 @@
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: auto-ext-svc
+spec:
+  type: ExternalName
+  externalName: joe-db.cfgr3xj38ihj.eu-central-1.rds.amazonaws.com
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auto-secret
+type: Opaque
+data:
+  username: ZGJ1c2Vy
+  password: ZGJwYXNzd29yZA==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auto-pvc
+  labels:
+    app: auto-label
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auto-svc
+  labels:
+    app: auto-label
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: auto-label
+    tier: frontend
+  type: LoadBalancer
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: auto-deploy
+  labels:
+    app: auto-label
+  annotations:
+    flux.weave.works/automated: 'true'
+spec:
+  selector:
+    matchLabels:
+      app: auto-label
+      tier: frontend
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: auto-label
+        tier: frontend
+    spec:
+      containers:
+      - image: jothireddy/k8srepo:latest
+        name: wordpress
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: auto-ext-svc
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: auto-secret
+              key: username
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: auto-secret
+              key: password
+        ports:
+        - containerPort: 80
+          name: wordpress
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: auto-pvc
